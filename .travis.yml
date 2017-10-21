@@ -2,82 +2,50 @@
 
 language: cpp
 
+git:
+  depth: 2000
+  submodules: true
+
 env:
   global:
-    - CCACHE_CPP2=1
-    - CCACHE_DISABLE=1
-    - JOBS=4
     - QT_FATAL_WARNINGS=1
     - SHADOW_BUILD_DIR=/tmp/shadow_build_dir
     # ANDROID_STOREPASS
     - secure: RGovyUnMw3fp/bHZi058JvANT1rYmNqrsuSYew0cIgirO6YbMHr/rsjwCm1FTYpBl8s1zgr+u2b8ftYnfnCz2YT+Aip4NWrVYpVU0FEmfytGILrnUS0pjlt8m7fU9AKR1ElOSll7yw7e1kftynN39Q321etvwbLZcXon6zz0suE=
 
+sudo: required
+
 matrix:
     fast_finish: true
     include:
-        - os: linux
-          dist: trusty
-          env: SPEC=linux-g++-64 CONFIG=installer
-          sudo: required
-        - os: linux
-          dist: trusty
-          env: SPEC=linux-g++-64 CONFIG=debug
-          sudo: required
-        - os: android
-          language: android
-          env: SPEC=android-g++ CONFIG=installer
-          sudo: false
+        - env: QT_SPEC=linux-g++-64 QGC_CONFIG=installer QGC_DOCKER_REPO="mavlink/qgc-build-linux:2017-10-21"
+          os: linux
+          services:
+            - docker
+        - env: QT_SPEC=linux-g++-64 QGC_CONFIG=debug QGC_DOCKER_REPO="mavlink/qgc-build-linux:2017-10-21"
+          os: linux
+          services:
+            - docker
+        - env: QT_SPEC=android-g++ QGC_CONFIG=installer QGC_DOCKER_REPO="mavlink/qgc-build-android:2017-10-21"
+          os: linux
+          services:
+            - docker
         - os: osx
           osx_image: xcode8.3
-          env: SPEC=macx-clang CONFIG=installer
-          sudo: required
+          env: QT_SPEC=macx-clang QGC_CONFIG=installer
+
 # OSX builds pared back to installer only since travis sucks so bad we can't afford more than one'
 #        - os: osx
 #          osx_image: xcode8
-#          env: SPEC=macx-clang CONFIG=debug
-#          sudo: required
+#          env: QT_SPEC=macx-clang QGC_CONFIG=debug
 #        - os: osx
 #          osx_image: xcode8
-#          env: SPEC=macx-ios-clang CONFIG=release
-#          sudo: false
-
-android:
-  components:
-    - android-21
-    - build-tools-21.1.1
-    - platform-tools
-
-addons:
-  apt:
-    packages:
-    - ccache
-    - espeak
-    - libespeak-dev
-    - libgstreamer-plugins-base1.0-dev
-    - libgstreamer1.0-0:amd64
-    - libgstreamer1.0-dev
-    - libsdl2-dev
-    - libudev-dev
-    - wget
+#          env: QT_SPEC=macx-ios-clang QGC_CONFIG=release
 
 cache:
-  directories:
-    - $HOME/.ccache
+  ccache: true
 
 before_install:
-  # fetch entire git repo to properly determine the version
-  - if [ "${CONFIG}" = "installer" ]; then
-        cd ${TRAVIS_BUILD_DIR} && git fetch --unshallow && git fetch --all --tags;
-    fi
-
-  # install ccache for osx/ios
-  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then
-        wget --quiet https://s3.amazonaws.com/px4-travis/toolchain/macos/ccache &&
-        chmod +x ccache && sudo mv ccache /usr/local/bin;
-    fi
-
-  # setup ccache
-  #- ccache -M 500MB && ccache -z
 
   # compile threads
   - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then
@@ -87,34 +55,8 @@ before_install:
     fi
 
 install:
-  # linux dependencies: qt
-  - if [ "${SPEC}" = "linux-g++-64" ]; then
-        wget --quiet https://s3-us-west-2.amazonaws.com/qgroundcontrol/dependencies/Qt5.9.1-linux-min.tar.bz2 &&
-        tar jxf Qt5.9.1-linux-min.tar.bz2 -C /tmp &&
-        export PATH=/tmp/Qt5.9-linux/5.9.1/gcc_64/bin:$PATH &&
-        export DISPLAY=:99.0 &&
-        sh -e /etc/init.d/xvfb start
-        ;
-    fi
-
-  # android dependencies: qt, gstreamer, android-ndk
-  - if [ "${SPEC}" = "android-g++" ]; then
-        wget --quiet https://s3-us-west-2.amazonaws.com/qgroundcontrol/dependencies/Qt5.9.1-android-min.tar.bz2 &&
-        tar jxf Qt5.9.1-android-min.tar.bz2 -C /tmp &&
-        wget --quiet https://s3-us-west-2.amazonaws.com/qgroundcontrol/dependencies/gstreamer-1.0-android-armv7-1.5.2.tar.bz2 &&
-        mkdir -p ${TRAVIS_BUILD_DIR}/gstreamer-1.0-android-armv7-1.5.2 &&
-        tar jxf gstreamer-1.0-android-armv7-1.5.2.tar.bz2 -C ${TRAVIS_BUILD_DIR}/gstreamer-1.0-android-armv7-1.5.2 &&
-        wget --quiet http://dl.google.com/android/ndk/android-ndk-r10e-linux-x86_64.bin &&
-        chmod +x android-ndk-r10e-linux-x86_64.bin &&
-        ./android-ndk-r10e-linux-x86_64.bin > /dev/null &&
-        export ANDROID_NDK_ROOT=`pwd`/android-ndk-r10e &&
-        export ANDROID_SDK_ROOT=/usr/local/android-sdk &&
-        export PATH=/tmp/Qt5.9-android/5.9.1/android_armv7/bin:`pwd`/android-ndk-r10e:$PATH && echo $PATH
-        ;
-    fi
-
   # osx dependencies: qt, gstreamer, gstreamer-devel
-  - if [ "${SPEC}" = "macx-clang" ]; then
+  - if [ "${QT_SPEC}" = "macx-clang" ]; then
         wget --quiet https://s3-us-west-2.amazonaws.com/qgroundcontrol/dependencies/Qt5.9.1-mac-clang-min.tar.bz2 &&
         tar jxf Qt5.9.1-mac-clang-min.tar.bz2 -C /tmp &&
         wget --quiet https://s3-us-west-2.amazonaws.com/qgroundcontrol/dependencies/gstreamer-1.0-1.5.2-x86_64.pkg &&
@@ -131,7 +73,7 @@ install:
     fi
 
   # ios dependencies: qt, TODO: add gstreamer
-  - if [ "${SPEC}" = "macx-ios-clang" ]; then
+  - if [ "${QT_SPEC}" = "macx-ios-clang" ]; then
         wget --quiet https://s3-us-west-2.amazonaws.com/qgroundcontrol/dependencies/Qt5.8.0-ios-min.tar.bz2 &&
         tar jxf Qt5.8.0-ios-min.tar.bz2 -C /tmp &&
         export IOS_CCACHE_CC=`/usr/bin/xcrun -sdk iphoneos -find clang` &&
@@ -142,39 +84,38 @@ install:
     fi
 
 before_script:
-  - cd ${TRAVIS_BUILD_DIR}
-
   # grab latest PX4 parameter and airframe metadata
   - wget --quiet http://px4-travis.s3.amazonaws.com/Firmware/master/parameters.xml -O src/FirmwarePlugin/PX4/PX4ParameterFactMetaData.xml
   - wget --quiet http://px4-travis.s3.amazonaws.com/Firmware/master/airframes.xml -O src/AutoPilotPlugins/PX4/AirframeFactMetaData.xml
 
   # switch android config from installer to release if the android storepass isn't available
-  - if [[ "${SPEC}" = "android-g++" && "${CONFIG}" = "installer" && -z ${ANDROID_STOREPASS} ]]; then
-        export CONFIG=release;
+  - if [[ "${QT_SPEC}" = "android-g++" && "${QGC_CONFIG}" = "installer" && -z ${ANDROID_STOREPASS} ]]; then
+        export QGC_CONFIG=release;
     fi
 
   # insert QGC version in AndroidManifest.xml
-  - if [ "${SPEC}" = "android-g++" ]; then
+  - if [ "${QT_SPEC}" = "android-g++" ]; then
         git remote set-branches origin 'master' &&
         git fetch --tags origin master &&
         ./tools/update_android_version.sh;
     fi
 
 script:
-  # run qmake
-  - mkdir ${SHADOW_BUILD_DIR} && cd ${SHADOW_BUILD_DIR}
-  - qmake -r ${TRAVIS_BUILD_DIR}/qgroundcontrol.pro CONFIG+=${CONFIG} CONFIG+=WarningsAsErrorsOn -spec ${SPEC}
+  - mkdir /tmp/shadow_build_dir
 
   # compile
-  - if [ "${SPEC}" != "macx-ios-clang" ]; then
-        make -j$JOBS;
-    else
+  - if [[ "${QT_SPEC}" = "linux-g++-64" || "${QT_SPEC}" = "android-g++" ]]; then
+        ./tools/docker_build.sh;
+    elif [ "${QT_SPEC}" = "macx-ios-clang" ]; then
+        cd ${SHADOW_BUILD_DIR} && qmake -r ${TRAVIS_BUILD_DIR}/qgroundcontrol.pro CONFIG+=${QGC_CONFIG} CONFIG+=WarningsAsErrorsOn -spec ${QT_SPEC} &&
         xcodebuild -IDEBuildOperationMaxNumberOfConcurrentCompileTasks=$JOBS -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO | xcpretty -c && $(exit ${PIPESTATUS[0]});
+    else
+        cd ${SHADOW_BUILD_DIR} && qmake -r ${TRAVIS_BUILD_DIR}/qgroundcontrol.pro CONFIG+=${QGC_CONFIG} CONFIG+=WarningsAsErrorsOn -spec ${QT_SPEC} &&
+        make -j$JOBS;
     fi
-  #- ccache -s
 
   # unit tests linux
-  - if [[ "${SPEC}" = "linux-g++-64" && "${CONFIG}" = "debug" ]]; then
+  - if [[ "${QT_SPEC}" = "linux-g++-64" && "${QGC_CONFIG}" = "debug" ]]; then
     	mkdir -p ~/.config/QtProject/ && cp ${TRAVIS_BUILD_DIR}/test/qtlogging.ini ~/.config/QtProject/ &&
             ./debug/qgroundcontrol-start.sh --unittest;
     fi
@@ -191,7 +132,7 @@ after_success:
     else
         GOOGLE_PLAY_PKG=none;
     fi
-  - if [[ "${SPEC}" = "android-g++" && "${TRAVIS_PULL_REQUEST}" = "false" && "${GOOGLE_PLAY_PKG}" != "none" ]]; then
+  - if [[ "${QT_SPEC}" = "android-g++" && "${TRAVIS_PULL_REQUEST}" = "false" && "${GOOGLE_PLAY_PKG}" != "none" ]]; then
         pip install --user google-api-python-client PyOpenSSL &&
         openssl aes-256-cbc -K $encrypted_25db6eb7c3fd_key -iv $encrypted_25db6eb7c3fd_iv -in android/Google_Play_Android_Developer-4432a3c4f5d1.json.enc -out android/Google_Play_Android_Developer-4432a3c4f5d1.json -d &&
         ./tools/google_play_upload.py production ${GOOGLE_PLAY_PKG} ${SHADOW_BUILD_DIR}/release/package/QGroundControl.apk;
@@ -200,7 +141,7 @@ after_success:
 before_deploy:
   # create linux appimage
   - cd ${TRAVIS_BUILD_DIR}
-  - if [[ "${SPEC}" = "linux-g++-64" && "${CONFIG}" = "installer" ]]; then
+  - if [[ "${QT_SPEC}" = "linux-g++-64" && "${QGC_CONFIG}" = "installer" ]]; then
         ./deploy/create_linux_appimage.sh ${TRAVIS_BUILD_DIR} ${SHADOW_BUILD_DIR}/release ${SHADOW_BUILD_DIR}/release/package;
     fi
 
@@ -218,7 +159,7 @@ deploy:
     skip_cleanup: true
     on:
       all_branches: true
-      condition: $CONFIG = installer
+      condition: $QGC_CONFIG = installer
 
   # deploy tagged installers to s3 latest/
   - provider: s3
@@ -233,7 +174,7 @@ deploy:
     skip_cleanup: true
     on:
       tags: true
-      condition: $CONFIG = installer
+      condition: $QGC_CONFIG = installer
 
   # deploy tagged installers to s3 version folder
   - provider: s3
@@ -248,7 +189,7 @@ deploy:
     skip_cleanup: true
     on:
       tags: true
-      condition: $CONFIG = installer
+      condition: $QGC_CONFIG = installer
 
   # deploy installers to Github releases if on a tag
   - provider: releases
@@ -261,12 +202,5 @@ deploy:
     skip_cleanup: true
     on:
       tags: true
-      condition: $CONFIG = installer
+      condition: $QGC_CONFIG = installer
 
-notifications:
-  webhooks:
-    urls:
-      - https://webhooks.gitter.im/e/60b033428ae9dc715662
-    on_success: change
-    on_failure: always
-    on_start: never
